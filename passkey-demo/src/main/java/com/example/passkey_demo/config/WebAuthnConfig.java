@@ -19,13 +19,13 @@ import com.webauthn4j.data.attestation.statement.COSEAlgorithmIdentifier;
 @Configuration
 public class WebAuthnConfig {
 
-    @Value("${webauthn.rp.id:localhost}")
+    @Value("${webauthn.rp.id:nonevadingly-nonconversant-amber.ngrok-free.dev}")
     private String rpId;
 
     @Value("${webauthn.rp.name:Passkey Demo}")
     private String rpName;
 
-    @Value("${webauthn.origin:http://localhost:8082}")
+    @Value("${webauthn.origin:https://nonevadingly-nonconversant-amber.ngrok-free.dev}")
     private String origin;
 
     public String getRpName() {
@@ -46,9 +46,9 @@ public class WebAuthnConfig {
     @Bean
     public AuthenticatorSelectionCriteria authenticatorSelectionCriteria() {
         return new AuthenticatorSelectionCriteria(
-                AuthenticatorAttachment.CROSS_PLATFORM,
-                ResidentKeyRequirement.PREFERRED,
-                UserVerificationRequirement.PREFERRED);
+                AuthenticatorAttachment.PLATFORM,
+                ResidentKeyRequirement.REQUIRED,
+                UserVerificationRequirement.REQUIRED);
     }
 
     @Bean

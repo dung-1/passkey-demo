@@ -248,10 +248,10 @@
                             displayName: options.user.displayName || options.user.name
                         },
                         pubKeyCredParams: options.pubKeyCredParams || [{ alg: -7, type: 'public-key' }],
-                        authenticatorSelection: options.authenticatorSelection || {
-                            authenticatorAttachment: 'cross-platform',
-                            userVerification: 'preferred',
-                            requireResidentKey: false
+                        authenticatorSelection: {
+                            authenticatorAttachment: "platform",
+                            residentKey: "required",
+                            userVerification: "required"
                         },
                         attestation: options.attestation || 'none',
                         timeout: 60000 // 60 seconds timeout

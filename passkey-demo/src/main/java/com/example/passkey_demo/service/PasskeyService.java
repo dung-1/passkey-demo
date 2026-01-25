@@ -70,10 +70,10 @@ public class PasskeyService {
     @Autowired
     private WebAuthnManager webAuthnManager;
 
-    @Value("${webauthn.rp.id:localhost}")
+    @Value("${webauthn.rp.id:nonevadingly-nonconversant-amber.ngrok-free.dev}")
     private String rpId;
 
-    @Value("${webauthn.origin:http://localhost:8082}")
+    @Value("${webauthn.origin:https://nonevadingly-nonconversant-amber.ngrok-free.dev}")
     private String origin;
 
     private final SecureRandom random = new SecureRandom();
