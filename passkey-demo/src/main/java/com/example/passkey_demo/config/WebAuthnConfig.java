@@ -3,7 +3,7 @@ package com.example.passkey_demo.config;
 import java.util.Collections;
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Value; // ← Thêm import này
+import org.springframework.beans.factory.annotation.Value; // <- Add this import
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -34,13 +34,13 @@ public class WebAuthnConfig {
 
     @Bean
     public List<PublicKeyCredentialParameters> publicKeyCredentialParameters() {
-        // Sửa: Dùng new PublicKeyCredentialParameters(...) và Collections.singletonList
+        // Fixed: Use new PublicKeyCredentialParameters(...) and Collections.singletonList
         PublicKeyCredentialParameters param = new PublicKeyCredentialParameters(
                 PublicKeyCredentialType.PUBLIC_KEY,
-                COSEAlgorithmIdentifier.ES256 // ← Đã import đúng
+                COSEAlgorithmIdentifier.ES256 // <- Already imported correctly
         );
 
-        return Collections.singletonList(param); // Hoặc List.of(param) nếu dùng Java 9+
+        return Collections.singletonList(param); // Or List.of(param) if using Java 9+
     }
 
     @Bean

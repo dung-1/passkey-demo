@@ -3,6 +3,7 @@
     <option name="ALTERNATIVE_JRE_PATH" value="$PROJECT_DIR$/../../../../Program Files/Java/jdk-21" />
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <module name="passkey-demo" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/passkey-demo" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>

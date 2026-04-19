@@ -17,15 +17,15 @@ public interface ChallengeRepository extends JpaRepository<Challenge, Long> {
     Optional<Challenge> findByEmailAndType(String email, Challenge.ChallengeType type);
 
     /**
-     * Lấy challenge mới nhất (theo createdAt DESC) cho email và type Đảm bảo
-     * lấy đúng challenge được tạo gần nhất
+     * Get the latest challenge (by createdAt DESC) for email and type. Ensure
+     * we get the challenge that was created most recently.
      */
     Optional<Challenge> findFirstByEmailAndTypeOrderByCreatedAtDesc(
             String email, Challenge.ChallengeType type);
 
     /**
-     * Xóa tất cả challenge của user theo email và type Dùng để cleanup trước
-     * khi tạo challenge mới
+     * Delete all challenges of a user by email and type. Used for cleanup
+     * before creating a new challenge.
      */
     @Modifying
     void deleteAllByEmailAndType(String email, ChallengeType type);

@@ -15,6 +15,7 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 public class User implements UserDetails {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -22,7 +23,7 @@ public class User implements UserDetails {
     private String email;
     private String password; // hashed
 
-    // Các field khác cho UserDetails (Spring Security)
+    // Other fields for UserDetails (Spring Security)
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("USER"));

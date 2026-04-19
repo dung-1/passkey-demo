@@ -40,7 +40,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
-                // ⚠️ BẮT BUỘC
+                // WARNING: MANDATORY
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(
                         "/",
@@ -48,14 +48,17 @@ public class SecurityConfig {
                         "/register",
                         "/dashboard",
                         "/login-passkey/**",
-                        "/register-passkey/**",
+                        "/register-passkey/**"
+                ).permitAll()
+                .requestMatchers(
                         "/css/**",
                         "/js/**",
-                        "/images/**"
-                ).permitAll()
-                .anyRequest().authenticated()
+                        "/images/**",
+                        "/webjars/**",
+                        "/favicon.ico"
+                ).permitAll().anyRequest().authenticated()
                 )
-                // ⚠️ ĐỔI SANG IF_REQUIRED cho WebAuthn
+                // WARNING: Switch to IF_REQUIRED for WebAuthn
                 .sessionManagement(session
                         -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                 )
@@ -99,7 +102,7 @@ public class SecurityConfig {
 
         configuration.setAllowedHeaders(List.of("*"));
 
-        // nếu frontend dùng cookie / session
+        // if frontend uses cookie / session
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source

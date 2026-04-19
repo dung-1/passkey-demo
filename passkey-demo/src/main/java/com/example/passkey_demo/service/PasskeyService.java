@@ -53,129 +53,130 @@ import com.webauthn4j.server.ServerProperty;
 import com.webauthn4j.util.Base64UrlUtil;
 import com.webauthn4j.verifier.exception.VerificationException;
 
-@Service
-public class PasskeyService {
+@ Service 
 
-    private static final Logger logger = LoggerFactory.getLogger(PasskeyService.class);
+    public class PasskeyService {
 
-    @Autowired
-    private CredentialRepository credentialRepository;
+        private static final Logger logger = LoggerFactory.getLogger(PasskeyService.class);
 
-    @Autowired
-    private ChallengeRepository challengeRepository;
+        @Autowired
+        private CredentialRepository credentialRepository;
 
-    @Autowired
-    private WebAuthnConfig webAuthnConfig;
+        @Autowired
+        private ChallengeRepository challengeRepository;
 
-    @Autowired
-    private WebAuthnManager webAuthnManager;
+        @Autowired
+        private WebAuthnConfig webAuthnConfig;
 
-    @Value("${webauthn.rp.id:nonevadingly-nonconversant-amber.ngrok-free.dev}")
-    private String rpId;
+        @Autowired
+        private WebAuthnManager webAuthnManager;
 
-    @Value("${webauthn.origin:https://nonevadingly-nonconversant-amber.ngrok-free.dev}")
-    private String origin;
+        @Value("${webauthn.rp.id:nonevadingly-nonconversant-amber.ngrok-free.dev}")
+        private String rpId;
 
-    private final SecureRandom random = new SecureRandom();
-    private final ObjectConverter objectConverter = new ObjectConverter();
+        @Value("${webauthn.origin:https://nonevadingly-nonconversant-amber.ngrok-free.dev}")
+        private String origin;
 
-    @Transactional
-    public PublicKeyCredentialCreationOptions startRegistration(User user) {
-        logger.info("Starting passkey registration for user: {}", user.getEmail());
+        private final SecureRandom random = new SecureRandom();
+        private final ObjectConverter objectConverter = new ObjectConverter();
 
-        // Xóa TẤT CẢ challenge REGISTRATION cũ của user để đảm bảo chỉ có 1 challenge active
-        // Điều này tránh race condition và challenge mismatch
-        challengeRepository.deleteAllByEmailAndType(
-                user.getEmail(),
-                Challenge.ChallengeType.REGISTRATION
-        );
+        @Transactional
+        public PublicKeyCredentialCreationOptions startRegistration(User user) {
+            logger.info("Starting passkey registration for user: {}", user.getEmail());
 
-        logger.debug("Deleted old registration challenges for user: {}", user.getEmail());
+            // Delete ALL old REGISTRATION challenges to ensure only 1 challenge is active
+            // This prevents race conditions and challenge mismatches
+            challengeRepository.deleteAllByEmailAndType(
+                    user.getEmail(),
+                    Challenge.ChallengeType.REGISTRATION
+            );
 
-        // Generate WebAuthn challenge
-        com.webauthn4j.data.client.challenge.Challenge webAuthnChallenge = generateChallenge();
+            logger.debug("Deleted old registration challenges for user: {}", user.getEmail());
 
-        // Log challenge value (base64url encoded) để debug - QUAN TRỌNG để verify match
-        String challengeBase64 = Base64UrlUtil.encodeToString(webAuthnChallenge.getValue());
-        logger.info("Generated challenge for user {}: {}", user.getEmail(), challengeBase64);
+            // Generate WebAuthn challenge
+            com.webauthn4j.data.client.challenge.Challenge webAuthnChallenge = generateChallenge();
 
-        // Save challenge to database (raw bytes)
-        Challenge dbChallenge = new Challenge(
-                webAuthnChallenge.getValue(),
-                user.getEmail(),
-                Challenge.ChallengeType.REGISTRATION);
-        challengeRepository.save(dbChallenge);
-        logger.debug("Saved registration challenge (ID: {}) for user: {}",
-                dbChallenge.getId(), user.getEmail());
+            // Log challenge value (base64url encoded) for debugging - IMPORTANT for verifying match
+            String challengeBase64 = Base64UrlUtil.encodeToString(webAuthnChallenge.getValue());
+            logger.info("Generated challenge for user {}: {}", user.getEmail(), challengeBase64);
 
-        PublicKeyCredentialUserEntity userEntity = new PublicKeyCredentialUserEntity(
-                user.getId().toString().getBytes(),
-                user.getEmail(),
-                user.getEmail());
+            // Save challenge to database (raw bytes)
+            Challenge dbChallenge = new Challenge(
+                    webAuthnChallenge.getValue(),
+                    user.getEmail(),
+                    Challenge.ChallengeType.REGISTRATION);
+            challengeRepository.save(dbChallenge);
+            logger.debug("Saved registration challenge (ID: {}) for user: {}",
+                    dbChallenge.getId(), user.getEmail());
 
-        PublicKeyCredentialRpEntity rpEntity = new PublicKeyCredentialRpEntity(
-                rpId,
-                webAuthnConfig.getRpName());
+            PublicKeyCredentialUserEntity userEntity = new PublicKeyCredentialUserEntity(
+                    user.getId().toString().getBytes(),
+                    user.getEmail(),
+                    user.getEmail());
 
-        List<PublicKeyCredentialParameters> pubKeyCredParams = webAuthnConfig.publicKeyCredentialParameters();
-        AuthenticatorSelectionCriteria authenticatorSelection = webAuthnConfig.authenticatorSelectionCriteria();
+            PublicKeyCredentialRpEntity rpEntity = new PublicKeyCredentialRpEntity(
+                    rpId,
+                    webAuthnConfig.getRpName());
 
-        return new PublicKeyCredentialCreationOptions(
-                rpEntity,
-                userEntity,
-                webAuthnChallenge,
-                pubKeyCredParams,
-                null,
-                null,
-                authenticatorSelection,
-                AttestationConveyancePreference.NONE,
-                null);
-    }
+            List<PublicKeyCredentialParameters> pubKeyCredParams = webAuthnConfig.publicKeyCredentialParameters();
+            AuthenticatorSelectionCriteria authenticatorSelection = webAuthnConfig.authenticatorSelectionCriteria();
 
-    @Transactional
-    public void finishRegistration(
-            PublicKeyCredential<AuthenticatorAttestationResponse, RegistrationExtensionClientOutput> credential,
-            User user) throws Exception {
+            return new PublicKeyCredentialCreationOptions(
+                    rpEntity,
+                    userEntity,
+                    webAuthnChallenge,
+                    pubKeyCredParams,
+                    null,
+                    null,
+                    authenticatorSelection,
+                    AttestationConveyancePreference.NONE,
+                    null);
+        }
 
-        logger.info("Finishing passkey registration for user: {}", user.getEmail());
+        @Transactional
+        public void finishRegistration(
+                PublicKeyCredential<AuthenticatorAttestationResponse, RegistrationExtensionClientOutput> credential,
+                User user) throws Exception {
 
-        Challenge dbChallenge = null;
-        try {
-            // Load challenge mới nhất từ database (ORDER BY createdAt DESC)
-            // Đảm bảo lấy đúng challenge được tạo gần nhất
-            dbChallenge = challengeRepository
-                    .findFirstByEmailAndTypeOrderByCreatedAtDesc(
-                            user.getEmail(), Challenge.ChallengeType.REGISTRATION)
-                    .orElseThrow(() -> {
-                        logger.error("Challenge not found for user: {}", user.getEmail());
-                        return new RuntimeException("Challenge not found for user: " + user.getEmail());
-                    });
+            logger.info("Finishing passkey registration for user: {}", user.getEmail());
 
-            logger.debug("Found challenge (ID: {}) for user: {}", dbChallenge.getId(), user.getEmail());
+            Challenge dbChallenge = null;
+            try {
+                // Load the latest challenge from database (ORDER BY createdAt DESC)
+                // Ensure we get the challenge that was created most recently
+                dbChallenge = challengeRepository
+                        .findFirstByEmailAndTypeOrderByCreatedAtDesc(
+                                user.getEmail(), Challenge.ChallengeType.REGISTRATION)
+                        .orElseThrow(() -> {
+                            logger.error("Challenge not found for user: {}", user.getEmail());
+                            return new RuntimeException("Challenge not found for user: " + user.getEmail());
+                        });
 
-            // Validate challenge expiration
-            if (dbChallenge.isExpired()) {
-                challengeRepository.delete(dbChallenge);
-                logger.error("Challenge expired for user: {}", user.getEmail());
-                throw new RuntimeException("Challenge has expired. Please try again.");
-            }
+                logger.debug("Found challenge (ID: {}) for user: {}", dbChallenge.getId(), user.getEmail());
 
-            // Log challenge từ database (base64url) - QUAN TRỌNG để verify match
-            String challengeFromDb = Base64UrlUtil.encodeToString(dbChallenge.getChallenge());
-            logger.info("Challenge from DB for user {}: {}", user.getEmail(), challengeFromDb);
+                // Validate challenge expiration
+                if (dbChallenge.isExpired()) {
+                    challengeRepository.delete(dbChallenge);
+                    logger.error("Challenge expired for user: {}", user.getEmail());
+                    throw new RuntimeException("Challenge has expired. Please try again.");
+                }
 
-            // Convert database challenge to WebAuthn challenge
-            com.webauthn4j.data.client.challenge.Challenge webAuthnChallenge = new DefaultChallenge(
-                    dbChallenge.getChallenge());
-            Origin originObj = new Origin(origin);
+                // Log challenge from database (base64url) - IMPORTANT for verifying match
+                String challengeFromDb = Base64UrlUtil.encodeToString(dbChallenge.getChallenge());
+                logger.info("Challenge from DB for user {}: {}", user.getEmail(), challengeFromDb);
 
-            ServerProperty serverProperty = new ServerProperty(originObj, rpId, webAuthnChallenge, null);
+                // Convert database challenge to WebAuthn challenge
+                com.webauthn4j.data.client.challenge.Challenge webAuthnChallenge = new DefaultChallenge(
+                        dbChallenge.getChallenge());
+                Origin originObj = new Origin(origin);
 
-            // Log challenge trong ServerProperty để verify match với challenge từ DB
-            String challengeInServerProperty = Base64UrlUtil.encodeToString(webAuthnChallenge.getValue());
-            logger.info("Challenge in ServerProperty for user {}: {}", user.getEmail(), challengeInServerProperty);
+                ServerProperty serverProperty = new ServerProperty(originObj, rpId, webAuthnChallenge, null);
 
-            // Verify challenge match - 2 log trên PHẢI giống nhau tuyệt đối
+                // Log challenge in ServerProperty to verify match with challenge from DB
+                String challengeInServerProperty = Base64UrlUtil.encodeToString(webAuthnChallenge.getValue());
+                logger.info("Challenge in ServerProperty for user {}: {}", user.getEmail(), challengeInServerProperty);
+
+                // Verify challenge match - both logs above MUST be identical
             if (!challengeFromDb.equals(challengeInServerProperty)) {
                 logger.error("CHALLENGE MISMATCH for user {}: DB={}, ServerProperty={}",
                         user.getEmail(), challengeFromDb, challengeInServerProperty);
@@ -221,7 +222,7 @@ public class PasskeyService {
             // The public key is stored as CBOR-encoded COSEKey in the attestation object
             byte[] credentialPublicKey;
             try {
-                // Get the attested credential data which contains the COSEKey
+                //  et the attested credential data which contains the COSEKey
                 var attestedCredentialData = registrationData.getAttestationObject()
                         .getAuthenticatorData()
                         .getAttestedCredentialData();
@@ -265,9 +266,17 @@ public class PasskeyService {
             logger.debug("Deleted challenge (ID: {}) after successful registration completion for user: {}",
                     dbChallenge.getId(), user.getEmail());
 
+        
+            
+
+        
         } catch (RuntimeException e) {
             // Re-throw RuntimeException (challenge already handled in specific cases)
-            throw e;
+         
+          throw e;
+            
+
+        
         } catch (Exception e) {
             logger.error("Unexpected error during registration for user: {}", user.getEmail(), e);
             // Ensure challenge is deleted on any unexpected error

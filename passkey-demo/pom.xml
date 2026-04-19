@@ -67,16 +67,20 @@
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-web</artifactId>
-        </dependency>
-        <dependency>
-    <groupId>com.webauthn4j</groupId>
-    <artifactId>webauthn4j-core</artifactId>
-    <version>0.30.2.RELEASE</version>
+
+<dependency>
+    <groupId>org.springframework.security</groupId>
+    <artifactId>spring-security-web</artifactId>
     <scope>compile</scope>
 </dependency>
+
+        <dependency>
+
+            <groupId>com.webauthn4j</groupId>
+            <artifactId>webauthn4j-core</artifactId>    
+            <version>0.30.2.RELEASE</version>
+            <scope>compile</scope>
+        </dependency>
         <!-- JWT Dependencies -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
@@ -85,7 +89,7 @@
             <scope>compile</scope>
         </dependency>
  
-        <!-- Để parse JSON tốt hơn -->
+        <!-- For better JSON parsing -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>

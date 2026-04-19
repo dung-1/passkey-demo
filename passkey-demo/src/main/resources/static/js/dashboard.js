@@ -1,0 +1,310 @@
+// Check authentication
+const token = localStorage.getItem("jwt");
+if (!token) {
+  window.location.href = "/login";
+}
+
+// Helper function to convert base64url to Uint8Array
+function base64UrlToUint8Array(base64url) {
+  // Validate input
+  if (!base64url || typeof base64url !== "string") {
+    throw new Error("Invalid base64url input: must be a non-empty string");
+  }
+
+  // Remove any existing padding
+  base64url = base64url.replace(/=/g, "");
+
+  // Replace URL-safe characters to standard base64
+  let base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+
+  // Calculate and add correct padding (0, 1, 2, or 3)
+  const paddingNeeded = (4 - (base64.length % 4)) % 4;
+  base64 += "=".repeat(paddingNeeded);
+
+  // Decode base64 to binary string
+  const binaryString = atob(base64);
+
+  // Convert to Uint8Array
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  return bytes;
+}
+
+// Helper function to convert ArrayBuffer/Uint8Array to base64url (for debugging)
+function arrayBufferToBase64Url(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+// Helper function to set button loading state
+function setButtonLoading(buttonId, loading) {
+  const button = document.getElementById(buttonId);
+  if (loading) {
+    button.disabled = true;
+    button.innerHTML =
+      '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+  } else {
+    button.disabled = false;
+    button.innerHTML = "🔐 Register Passkey/Biometric";
+  }
+}
+
+// Register passkey
+document
+  .getElementById("registerPasskeyBtn")
+  .addEventListener("click", async function () {
+    // Check if WebAuthn is supported
+    if (!window.PublicKeyCredential) {
+      showError("Your browser does not support WebAuthn/Passkey");
+      return;
+    }
+
+    setButtonLoading("registerPasskeyBtn", true);
+    hideMessages();
+
+    try {
+      // Step 1: Get registration options
+      const startResponse = await fetch("/register-passkey/start", {
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+      });
+
+      if (!startResponse.ok) {
+        const errorText = await startResponse.text();
+        if (startResponse.status === 401) {
+          showError("Session expired. Please login again.");
+          setTimeout(() => {
+            logout();
+          }, 2000);
+          return;
+        }
+        throw new Error(errorText || "Cannot get registration information");
+      }
+
+      const options = await startResponse.json();
+
+      // Validate response
+      if (!options.challenge || !options.rp || !options.user) {
+        throw new Error("Registration information is invalid");
+      }
+
+      // Step 2: Call WebAuthn API
+      // Log challenge from backend
+      console.log("[DEBUG] Challenge from backend:", options.challenge);
+      console.log("[DEBUG] Challenge type:", typeof options.challenge);
+
+      // Handle challenge - WebAuthn4J may serialize it as an object with 'value' property
+      // or as a direct Base64URL string
+      let challengeBytes;
+      try {
+        let challengeString = null;
+
+        // Check if challenge is an object with 'value' property (WebAuthn4J serialization)
+        if (options.challenge && typeof options.challenge === "object") {
+          if (options.challenge.value) {
+            // WebAuthn4J serializes Challenge as { "value": "base64url_string" }
+            challengeString = options.challenge.value;
+          } else if (Array.isArray(options.challenge)) {
+            // If it's already an array, convert directly
+            challengeBytes = new Uint8Array(options.challenge);
+          } else {
+            throw new Error("Challenge object does not have expected format");
+          }
+        } else if (typeof options.challenge === "string") {
+          challengeString = options.challenge;
+        } else {
+          throw new Error(
+            `Unexpected challenge type: ${typeof options.challenge}`,
+          );
+        }
+
+        // If we have a string, decode it from Base64URL
+        if (challengeString !== null) {
+          // Validate challenge format
+          if (!challengeString || challengeString.trim() === "") {
+            throw new Error("Challenge string is empty");
+          }
+          challengeBytes = base64UrlToUint8Array(challengeString);
+        }
+
+        // Validate we have challenge bytes
+        if (!challengeBytes || challengeBytes.length === 0) {
+          throw new Error("Challenge bytes are empty after decoding");
+        }
+
+        // Log challenge bytes after decoding
+        console.log("[DEBUG] Challenge bytes length:", challengeBytes.length);
+        console.log(
+          "[DEBUG] Challenge bytes (hex):",
+          Array.from(challengeBytes)
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join(" "),
+        );
+        console.log(
+          "[DEBUG] Challenge bytes (base64url):",
+          arrayBufferToBase64Url(challengeBytes),
+        );
+
+        // Verify challenge length (should be 32 bytes for WebAuthn)
+        if (challengeBytes.length !== 32) {
+          throw new Error(
+            `Invalid challenge length: ${challengeBytes.length} bytes, expected 32 bytes`,
+          );
+        }
+      } catch (error) {
+        console.error("[ERROR] Challenge decoding failed:", error);
+        console.error("[ERROR] Challenge value:", options.challenge);
+        throw new Error(`Failed to decode challenge: ${error.message}`);
+      }
+
+      // Handle user id - WebAuthn4J may serialize it similarly
+      let userIdBytes;
+      try {
+        let userIdString = null;
+
+        if (options.user.id && typeof options.user.id === "object") {
+          if (options.user.id.value) {
+            userIdString = options.user.id.value;
+          } else if (Array.isArray(options.user.id)) {
+            userIdBytes = new Uint8Array(options.user.id);
+          } else {
+            throw new Error("User ID object does not have expected format");
+          }
+        } else if (typeof options.user.id === "string") {
+          userIdString = options.user.id;
+        } else if (Array.isArray(options.user.id)) {
+          userIdBytes = new Uint8Array(options.user.id);
+        } else {
+          throw new Error(`Unexpected user ID type: ${typeof options.user.id}`);
+        }
+
+        // If we have a string, decode it from Base64URL
+        if (userIdString !== null) {
+          if (!userIdString || userIdString.trim() === "") {
+            throw new Error("User ID string is empty");
+          }
+          userIdBytes = base64UrlToUint8Array(userIdString);
+        }
+
+        if (!userIdBytes || userIdBytes.length === 0) {
+          throw new Error("User ID bytes are empty after decoding");
+        }
+      } catch (error) {
+        console.error("[ERROR] User ID decoding failed:", error);
+        throw new Error(`Failed to decode user ID: ${error.message}`);
+      }
+
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge: challengeBytes,
+          rp: {
+            id: options.rp.id,
+            name: options.rp.name,
+          },
+          user: {
+            id: userIdBytes,
+            name: options.user.name,
+            displayName: options.user.displayName || options.user.name,
+          },
+          pubKeyCredParams: options.pubKeyCredParams || [
+            { alg: -7, type: "public-key" },
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: "platform",
+            residentKey: "required",
+            userVerification: "required",
+          },
+          attestation: options.attestation || "none",
+          timeout: 60000, // 60 seconds timeout
+        },
+      });
+
+      if (!credential) {
+        throw new Error("Did not receive authentication information");
+      }
+
+      // Step 3: Send credential to server
+      const credentialForServer = {
+        id: credential.id,
+        rawId: Array.from(new Uint8Array(credential.rawId)),
+        response: {
+          attestationObject: Array.from(
+            new Uint8Array(credential.response.attestationObject),
+          ),
+          clientDataJSON: Array.from(
+            new Uint8Array(credential.response.clientDataJSON),
+          ),
+        },
+        type: credential.type,
+      };
+
+      const finishResponse = await fetch("/register-passkey/finish", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify(credentialForServer),
+      });
+
+      const result = await finishResponse.text();
+      if (finishResponse.ok) {
+        showSuccess(
+          "Passkey registration successful! You can now use passkey to login."
+        );
+        setButtonLoading("registerPasskeyBtn", false);
+      } else {
+        showError("Passkey registration failed: " + result);
+        setButtonLoading("registerPasskeyBtn", false);
+      }
+    } catch (error) {
+      let errorMessage = "Error: " + error.message;
+
+      if (error.name === "NotAllowedError") {
+        errorMessage = "User cancelled registration or timeout occurred";
+      } else if (error.name === "InvalidStateError") {
+        errorMessage = "Passkey already exists for this account";
+      } else if (error.name === "NotSupportedError") {
+        errorMessage = "Browser or device does not support WebAuthn";
+      } else if (error.name === "SecurityError") {
+        errorMessage = "Security error: Please check domain and HTTPS";
+      } else if (error.name === "UnknownError") {
+        errorMessage = "Unknown error. Please try again.";
+      }
+
+      showError(errorMessage);
+      setButtonLoading("registerPasskeyBtn", false);
+    }
+  });
+
+function hideMessages() {
+  document.getElementById("errorMessage").style.display = "none";
+  document.getElementById("successMessage").style.display = "none";
+}
+
+function logout() {
+  localStorage.removeItem("jwt");
+  window.location.href = "/login";
+}
+
+function showError(message) {
+  const errorDiv = document.getElementById("errorMessage");
+  errorDiv.textContent = message;
+  errorDiv.style.display = "block";
+  document.getElementById("successMessage").style.display = "none";
+}
+
+function showSuccess(message) {
+  const successDiv = document.getElementById("successMessage");
+  successDiv.textContent = message;
+  successDiv.style.display = "block";
+  document.getElementById("errorMessage").style.display = "none";
+}
